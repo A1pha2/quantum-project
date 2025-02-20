@@ -87,7 +87,7 @@ p1 = {
 bounds = FloatVar(lb=f1.lb, ub=f1.ub)
 
 # Base directories
-os.chdir("D:/quantum-project/ga") 
+os.chdir("../quantum-project/ga") 
 base_starting_solution_dir = os.path.join("..", "starting_solution", "CEC2021", "F12021")
 base_history_dir = os.path.join("..", "history", "ga", "CEC2021", "F12021", "MT19937")
 
