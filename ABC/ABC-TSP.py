@@ -1,0 +1,1324 @@
+from mealpy.swarm_based import ABC
+import os
+import numpy as np
+from mealpy import PermutationVar, BinaryVar, FloatVar
+
+parameters = [
+    {"epoch": 1000, "pop_size": 100},
+]
+
+def read_sets(file_path, pop_size, num_city):
+    """
+    Reads a file containing ranked sets and returns them as a list of lists.
+
+    Parameters:
+    - file_path (str): Path to the file containing the ranked sets.
+    - pop_size (int): Expected population size (number of sets).
+    - num_city (int): Expected number of cities (elements per set).
+
+    Returns:
+    - list: A list of ranked sets, where each set is a list of integers.
+
+    Raises:
+    - ValueError: If the file content does not match the expected dimensions.
+    """
+    sets = []
+    with open(file_path, 'r') as file:
+        for line in file:
+            set = list(map(int, line.strip().split()))
+            sets.append(set)
+
+    # Validate the dimensions of the ranked sets
+    if len(sets) != pop_size:
+        raise ValueError(f"Expected {pop_size} sets, but found {len(sets)} in the file.")
+
+    for set in sets:
+        if len(set) != num_city:
+            raise ValueError(f"Each set must have {num_city} elements. Found a set with {len(set)} elements.")
+
+    return np.array(sets)
+
+# Number of repetitions
+num_trials = 10
+
+def save_history_file(model, file_dir, file_prefix):
+    """
+    :param model: The optimization model containing the history
+    :param file_dir: The directory where the history file will be saved
+    :param file_prefix: Prefix for the history filename
+    """
+    history_file = os.path.join(file_dir, f"{file_prefix}_history.txt")
+
+    with open(history_file, "w") as f:
+
+        # for epoch in enumerate(model.history.list_global_best):
+        for epoch in range(0, 1000):
+            # fitness = agent.target.fitness, Global Fitness: {fitness}
+            # solution = agent.solution, Solution: {solution}
+
+            # Fetch additional metrics
+            diversity = model.history.list_diversity[epoch]
+            exploration = model.history.list_exploration[epoch]
+            exploitation = model.history.list_exploitation[epoch]
+            local_fitness = model.history.list_current_best_fit[epoch]
+            global_fitness = model.history.list_global_best_fit[epoch]
+            runtime = model.history.list_epoch_time[epoch]
+
+            f.write(
+                f"Epoch: {epoch+1}, Local Fitness: {local_fitness}, Global Fitness: {global_fitness}, Diversity: {diversity}, \
+Exploration: {exploration}, Exploitation: {exploitation}, Runtime: {runtime}\n")
+
+    print(f"History saved to {history_file}")
+os.chdir("D:/quantum-project/abc") 
+
+import sys
+
+# Add the parent directory to the Python path
+parent_dir = os.path.abspath(os.path.join(os.getcwd(), ".."))
+sys.path.append(parent_dir)
+
+# Now import from TSP.py
+from TSP import *
+
+filePath1 = os.path.join("..","TSP_problem","berlin52.tsp")
+coordinates1 = load_tsplib_tsp(filePath1)
+data, num_cities = prepare_tsp_data(coordinates1)
+
+distance_matrix = create_distance_matrix(coordinates1)
+print(distance_matrix)
+
+# Create the problem instance
+bounds = PermutationVar(valid_set=list(range(0, num_cities)), name="per_var")
+problem = TspProblem(bounds=bounds, minmax="min", data=data, save_population=True)
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "Berlin52")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "Berlin52", "MT19937")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_mt19937 = os.path.join(
+        base_starting_solution_dir, trial_name, "Mt19937.txt"
+    )
+
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_mt19937):
+        print(f"Skipping {file_path_mt19937} (File not found)")
+        continue  # Skip if the file does not exist
+
+    mt19937 = read_sets(file_path_mt19937, 100, 52)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=mt19937)
+
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+        # Print the best results for each run
+        print(
+            f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}"
+        )
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "Berlin52")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "Berlin52", "QuasiRandom")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_QuasiRandom = os.path.join(base_starting_solution_dir, trial_name, "QuasiRandom.txt")
+    
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_QuasiRandom):
+        print(f"Skipping {file_path_QuasiRandom} (File not found)")
+        continue  # Skip if the file does not exist
+    
+    QuasiRandom = read_sets(file_path_QuasiRandom, 100, 52)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=QuasiRandom)
+        
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        # Print the best results for each run
+        print(f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}")
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "Berlin52")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "Berlin52", "IBM")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_IBM = os.path.join(base_starting_solution_dir, trial_name, "IBM.txt")
+    
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_IBM):
+        print(f"Skipping {file_path_IBM} (File not found)")
+        continue  # Skip if the file does not exist
+    
+    IBM = read_sets(file_path_IBM, 100, 52)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=IBM)
+        
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        # Print the best results for each run
+        print(f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}")
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "Berlin52")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "Berlin52", "BeamSplitter")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_BeamSplitter = os.path.join(base_starting_solution_dir, trial_name, "BeamSplitter.txt")
+    
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_BeamSplitter):
+        print(f"Skipping {file_path_BeamSplitter} (File not found)")
+        continue  # Skip if the file does not exist
+    
+    BeamSplitter = read_sets(file_path_BeamSplitter, 100, 52)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=BeamSplitter)
+        
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        # Print the best results for each run
+        print(f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}")
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+
+
+filePath1 = os.path.join("..","TSP_problem","Bier127.tsp")
+coordinates1 = load_tsplib_tsp(filePath1)
+data, num_cities = prepare_tsp_data(coordinates1)
+
+distance_matrix = create_distance_matrix(coordinates1)
+print(distance_matrix)
+
+# Create the problem instance
+bounds = PermutationVar(valid_set=list(range(0, num_cities)), name="per_var")
+problem = TspProblem(bounds=bounds, minmax="min", data=data, save_population=True)
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "Bier127")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "Bier127", "MT19937")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_mt19937 = os.path.join(base_starting_solution_dir, trial_name, "Mt19937.txt")
+    
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_mt19937):
+        print(f"Skipping {file_path_mt19937} (File not found)")
+        continue  # Skip if the file does not exist
+    
+    mt19937 = read_sets(file_path_mt19937, 100, 127)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=mt19937)
+        
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        # Print the best results for each run
+        print(f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}")
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "Bier127")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "Bier127", "QuasiRandom")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_QuasiRandom = os.path.join(base_starting_solution_dir, trial_name, "QuasiRandom.txt")
+    
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_QuasiRandom):
+        print(f"Skipping {file_path_QuasiRandom} (File not found)")
+        continue  # Skip if the file does not exist
+    
+    QuasiRandom = read_sets(file_path_QuasiRandom, 100, 127)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=QuasiRandom)
+        
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        # Print the best results for each run
+        print(f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}")
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "Bier127")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "Bier127", "IBM")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_IBM = os.path.join(base_starting_solution_dir, trial_name, "IBM.txt")
+    
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_IBM):
+        print(f"Skipping {file_path_IBM} (File not found)")
+        continue  # Skip if the file does not exist
+    
+    IBM = read_sets(file_path_IBM, 100, 127)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=IBM)
+        
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        # Print the best results for each run
+        print(f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}")
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "Bier127")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "Bier127", "BeamSplitter")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_BeamSplitter = os.path.join(base_starting_solution_dir, trial_name, "BeamSplitter.txt")
+    
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_BeamSplitter):
+        print(f"Skipping {file_path_BeamSplitter} (File not found)")
+        continue  # Skip if the file does not exist
+    
+    BeamSplitter = read_sets(file_path_BeamSplitter, 100, 127)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=BeamSplitter)
+        
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        # Print the best results for each run
+        print(f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}")
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+
+
+filePath1 = os.path.join("..","TSP_problem","Eil101.tsp")
+coordinates1 = load_tsplib_tsp(filePath1)
+data, num_cities = prepare_tsp_data(coordinates1)
+
+distance_matrix = create_distance_matrix(coordinates1)
+print(distance_matrix)
+
+# Create the problem instance
+bounds = PermutationVar(valid_set=list(range(0, num_cities)), name="per_var")
+problem = TspProblem(bounds=bounds, minmax="min", data=data, save_population=True)
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "Eil101")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "Eil101", "MT19937")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_mt19937 = os.path.join(base_starting_solution_dir, trial_name, "Mt19937.txt")
+    
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_mt19937):
+        print(f"Skipping {file_path_mt19937} (File not found)")
+        continue  # Skip if the file does not exist
+    
+    mt19937 = read_sets(file_path_mt19937, 100, 101)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=mt19937)
+        
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        # Print the best results for each run
+        print(f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}")
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "Eil101")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "Eil101", "QuasiRandom")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_QuasiRandom = os.path.join(base_starting_solution_dir, trial_name, "QuasiRandom.txt")
+    
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_QuasiRandom):
+        print(f"Skipping {file_path_QuasiRandom} (File not found)")
+        continue  # Skip if the file does not exist
+    
+    QuasiRandom = read_sets(file_path_QuasiRandom, 100, 101)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=QuasiRandom)
+        
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        # Print the best results for each run
+        print(f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}")
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "Eil101")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "Eil101", "IBM")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_IBM = os.path.join(base_starting_solution_dir, trial_name, "IBM.txt")
+    
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_IBM):
+        print(f"Skipping {file_path_IBM} (File not found)")
+        continue  # Skip if the file does not exist
+    
+    IBM = read_sets(file_path_IBM, 100, 101)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=IBM)
+        
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        # Print the best results for each run
+        print(f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}")
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "Eil101")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "Eil101", "BeamSplitter")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_BeamSplitter = os.path.join(base_starting_solution_dir, trial_name, "BeamSplitter.txt")
+    
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_BeamSplitter):
+        print(f"Skipping {file_path_BeamSplitter} (File not found)")
+        continue  # Skip if the file does not exist
+    
+    BeamSplitter = read_sets(file_path_BeamSplitter, 100, 101)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=BeamSplitter)
+        
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        # Print the best results for each run
+        print(f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}")
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+
+
+filePath1 = os.path.join("..","TSP_problem","Pr76.tsp")
+coordinates1 = load_tsplib_tsp(filePath1)
+data, num_cities = prepare_tsp_data(coordinates1)
+
+distance_matrix = create_distance_matrix(coordinates1)
+print(distance_matrix)
+
+# Create the problem instance
+bounds = PermutationVar(valid_set=list(range(0, num_cities)), name="per_var")
+problem = TspProblem(bounds=bounds, minmax="min", data=data, save_population=True)
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "Pr76")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "Pr76", "MT19937")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_mt19937 = os.path.join(base_starting_solution_dir, trial_name, "Mt19937.txt")
+    
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_mt19937):
+        print(f"Skipping {file_path_mt19937} (File not found)")
+        continue  # Skip if the file does not exist
+    
+    mt19937 = read_sets(file_path_mt19937, 100, 76)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=mt19937)
+        
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        # Print the best results for each run
+        print(f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}")
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "Pr76")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "Pr76", "QuasiRandom")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_QuasiRandom = os.path.join(base_starting_solution_dir, trial_name, "QuasiRandom.txt")
+    
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_QuasiRandom):
+        print(f"Skipping {file_path_QuasiRandom} (File not found)")
+        continue  # Skip if the file does not exist
+    
+    QuasiRandom = read_sets(file_path_QuasiRandom, 100, 76)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=QuasiRandom)
+        
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        # Print the best results for each run
+        print(f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}")
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "Pr76")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "Pr76", "IBM")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_IBM = os.path.join(base_starting_solution_dir, trial_name, "IBM.txt")
+    
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_IBM):
+        print(f"Skipping {file_path_IBM} (File not found)")
+        continue  # Skip if the file does not exist
+    
+    IBM = read_sets(file_path_IBM, 100, 76)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=IBM)
+        
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        # Print the best results for each run
+        print(f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}")
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "Pr76")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "Pr76", "BeamSplitter")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_BeamSplitter = os.path.join(base_starting_solution_dir, trial_name, "BeamSplitter.txt")
+    
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_BeamSplitter):
+        print(f"Skipping {file_path_BeamSplitter} (File not found)")
+        continue  # Skip if the file does not exist
+    
+    BeamSplitter = read_sets(file_path_BeamSplitter, 100, 76)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=BeamSplitter)
+        
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        # Print the best results for each run
+        print(f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}")
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+
+
+filePath1 = os.path.join("..","TSP_problem","St70.tsp")
+coordinates1 = load_tsplib_tsp(filePath1)
+data, num_cities = prepare_tsp_data(coordinates1)
+
+distance_matrix = create_distance_matrix(coordinates1)
+print(distance_matrix)
+
+# Create the problem instance
+bounds = PermutationVar(valid_set=list(range(0, num_cities)), name="per_var")
+problem = TspProblem(bounds=bounds, minmax="min", data=data, save_population=True)
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "St70")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "St70", "MT19937")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_mt19937 = os.path.join(base_starting_solution_dir, trial_name, "Mt19937.txt")
+    
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_mt19937):
+        print(f"Skipping {file_path_mt19937} (File not found)")
+        continue  # Skip if the file does not exist
+    
+    mt19937 = read_sets(file_path_mt19937, 100, 70)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=mt19937)
+        
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        # Print the best results for each run
+        print(f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}")
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "St70")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "St70", "QuasiRandom")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_QuasiRandom = os.path.join(base_starting_solution_dir, trial_name, "QuasiRandom.txt")
+    
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_QuasiRandom):
+        print(f"Skipping {file_path_QuasiRandom} (File not found)")
+        continue  # Skip if the file does not exist
+    
+    QuasiRandom = read_sets(file_path_QuasiRandom, 100, 70)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=QuasiRandom)
+        
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        # Print the best results for each run
+        print(f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}")
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "St70")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "St70", "IBM")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_IBM = os.path.join(base_starting_solution_dir, trial_name, "IBM.txt")
+    
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_IBM):
+        print(f"Skipping {file_path_IBM} (File not found)")
+        continue  # Skip if the file does not exist
+    
+    IBM = read_sets(file_path_IBM, 100, 70)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=IBM)
+        
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        # Print the best results for each run
+        print(f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}")
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+
+
+# Base directories
+base_starting_solution_dir = os.path.join("..", "starting_solution", "TSP", "St70")
+base_history_dir = os.path.join("..", "history", "ABC", "tsp", "St70", "BeamSplitter")
+
+# Ensure the base history directory exists
+os.makedirs(base_history_dir, exist_ok=True)
+
+# Loop through each trial directory (trial_1 to trial_9)
+for trial_num in range(1, num_trials + 1):
+    # Construct the input file path for the current trial
+    trial_name = f"trial_{trial_num}"
+    file_path_BeamSplitter = os.path.join(base_starting_solution_dir, trial_name, "BeamSplitter.txt")
+    
+    # Read the corresponding starting solution
+    if not os.path.exists(file_path_BeamSplitter):
+        print(f"Skipping {file_path_BeamSplitter} (File not found)")
+        continue  # Skip if the file does not exist
+    
+    BeamSplitter = read_sets(file_path_BeamSplitter, 100, 70)
+
+    # Define the history directory for this trial
+    trial_history_dir = os.path.join(base_history_dir, trial_name)
+    os.makedirs(trial_history_dir, exist_ok=True)  # Ensure the directory exists
+
+    # Loop through the parameter sets
+    for idx, params in enumerate(parameters, start=1):
+        # Generate a sub-directory and filename prefix based on epoch and population size
+        file_prefix = f"e={params['epoch']}p={params['pop_size']}"
+        file_dir = os.path.join(trial_history_dir, file_prefix)
+        os.makedirs(file_dir, exist_ok=True)  # Ensure the directory exists
+
+        # Initialize and solve the model with specific parameters
+        model = ABC.OriginalABC(epoch=params["epoch"], pop_size=params["pop_size"])
+        history = model.solve(problem, starting_solutions=BeamSplitter)
+        
+        # Save the optimization history to a text file
+        save_history_file(model, file_dir, file_prefix)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        # Print the best results for each run
+        print(f"Trial {trial_num} - Run {idx}: Epoch={params['epoch']}, Pop Size={params['pop_size']}")
+        print(f"Best fitness: {model.g_best.target.fitness}")
+        print(f"Best solution: {model.problem.decode_solution(model.g_best.solution)}")
+
+
+
